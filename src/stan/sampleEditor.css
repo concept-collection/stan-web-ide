@@ -1,0 +1,180 @@
+/* The .sample form editor pane, themed with --vscode-* variables in the
+ * spirit of VS Code's settings editor. */
+
+.sample-editor {
+	height: 100%;
+	overflow-y: auto;
+	background-color: var(--vscode-editor-background);
+	color: var(--vscode-foreground);
+	font-family: system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+	font-size: 13px;
+}
+
+.sample-editor-inner {
+	max-width: 640px;
+	margin: 0 auto;
+	padding: 24px 32px 48px;
+}
+
+.sample-editor h2 {
+	margin: 0 0 2px;
+	font-size: 20px;
+	font-weight: 400;
+}
+
+.sample-editor-subtitle {
+	margin: 0 0 18px;
+	color: var(--vscode-descriptionForeground);
+	font-size: 12px;
+}
+
+.sample-field {
+	margin-bottom: 14px;
+}
+
+.sample-field label {
+	display: block;
+	margin-bottom: 4px;
+	font-weight: 600;
+}
+
+.sample-field .sample-field-hint {
+	margin-left: 8px;
+	font-weight: 400;
+	color: var(--vscode-descriptionForeground);
+	font-size: 12px;
+}
+
+.sample-field input,
+.sample-field select {
+	width: 260px;
+	max-width: 100%;
+	padding: 4px 6px;
+	font-size: 13px;
+	font-family: inherit;
+	color: var(--vscode-input-foreground);
+	background-color: var(--vscode-input-background);
+	border: 1px solid var(--vscode-input-border, transparent);
+	border-radius: 2px;
+	outline: none;
+	box-sizing: border-box;
+}
+
+.sample-field input:focus,
+.sample-field select:focus {
+	border-color: var(--vscode-focusBorder);
+}
+
+.sample-params {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, 150px);
+	gap: 12px 18px;
+	margin-bottom: 14px;
+}
+
+.sample-params .sample-field {
+	margin-bottom: 0;
+}
+
+.sample-params input {
+	width: 100%;
+}
+
+.sample-problems {
+	margin: 0 0 14px;
+	padding: 8px 10px;
+	border-left: 3px solid var(--vscode-editorError-foreground, #f48771);
+	background-color: var(--vscode-inputValidation-errorBackground, rgba(90, 29, 29, 0.4));
+	white-space: pre-wrap;
+}
+
+.sample-problems.warnings {
+	border-left-color: var(--vscode-editorWarning-foreground, #cca700);
+	background-color: var(--vscode-inputValidation-warningBackground, rgba(90, 73, 29, 0.4));
+}
+
+.sample-run-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin: 18px 0 10px;
+}
+
+.sample-run-button {
+	padding: 6px 18px;
+	font-size: 13px;
+	font-family: inherit;
+	cursor: pointer;
+	border-radius: 3px;
+	border: 1px solid var(--vscode-button-border, transparent);
+	background-color: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+}
+
+.sample-run-button:hover {
+	background-color: var(--vscode-button-hoverBackground);
+}
+
+.sample-run-button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.sample-run-button.stop {
+	background-color: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+}
+
+.sample-run-status {
+	color: var(--vscode-descriptionForeground);
+}
+
+.sample-run-status.error {
+	color: var(--vscode-editorError-foreground, #f48771);
+	white-space: pre-wrap;
+}
+
+.sample-run-status.done {
+	color: var(--vscode-charts-green, #89d185);
+}
+
+.sample-chains {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-top: 8px;
+}
+
+.sample-chain {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.sample-chain-label {
+	width: 200px;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.sample-chain-bar {
+	flex: 1;
+	height: 6px;
+	border-radius: 3px;
+	background-color: var(--vscode-input-background);
+	overflow: hidden;
+}
+
+.sample-chain-fill {
+	height: 100%;
+	width: 0;
+	border-radius: 3px;
+	background-color: var(--vscode-progressBar-background, #0e70c0);
+	transition: width 0.15s ease-out;
+}
+
+.sample-chain-fill.warmup {
+	opacity: 0.55;
+}

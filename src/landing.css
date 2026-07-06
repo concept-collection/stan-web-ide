@@ -1,0 +1,157 @@
+/* Project-picker landing page, themed with the same --vscode-* variables as
+ * the workbench (in the spirit of VS Code's welcome page). */
+
+.landing {
+	height: 100%;
+	overflow-y: auto;
+	background-color: var(--vscode-editor-background);
+	color: var(--vscode-foreground);
+	font-family: system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+	font-size: 14px;
+}
+
+.landing-inner {
+	max-width: 720px;
+	margin: 0 auto;
+	padding: 48px 32px 64px;
+}
+
+.landing-header h1 {
+	margin: 0 0 6px;
+	font-size: 34px;
+	font-weight: 300;
+	letter-spacing: 0.5px;
+}
+
+.landing-subtitle {
+	margin: 0 0 4px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.landing-links {
+	margin: 0;
+	color: var(--vscode-descriptionForeground);
+	font-size: 13px;
+}
+
+.landing-link {
+	color: var(--vscode-textLink-foreground);
+	text-decoration: none;
+	font-size: 13px;
+}
+
+.landing-link:hover {
+	text-decoration: underline;
+}
+
+.landing-section {
+	margin-top: 36px;
+}
+
+.landing-section h2 {
+	margin: 0 0 12px;
+	font-size: 18px;
+	font-weight: 400;
+	border-bottom: 1px solid var(--vscode-panel-border);
+	padding-bottom: 6px;
+}
+
+.landing-start {
+	display: flex;
+	gap: 10px;
+}
+
+.landing-button {
+	padding: 6px 14px;
+	font-size: 13px;
+	font-family: inherit;
+	cursor: pointer;
+	border-radius: 3px;
+	border: 1px solid var(--vscode-button-border, transparent);
+	background-color: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+}
+
+.landing-button:hover {
+	background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.landing-button.primary {
+	background-color: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+}
+
+.landing-button.primary:hover {
+	background-color: var(--vscode-button-hoverBackground);
+}
+
+.landing-button:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+
+.landing-projects {
+	display: flex;
+	flex-direction: column;
+}
+
+.landing-empty {
+	color: var(--vscode-descriptionForeground);
+	padding: 8px 0;
+}
+
+.landing-project {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 7px 8px;
+	border-radius: 4px;
+}
+
+.landing-project:hover {
+	background-color: var(--vscode-list-hoverBackground);
+}
+
+.landing-project-name {
+	color: var(--vscode-textLink-foreground);
+	text-decoration: none;
+	font-size: 14px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.landing-project-name:hover {
+	text-decoration: underline;
+}
+
+.landing-project-meta {
+	color: var(--vscode-descriptionForeground);
+	font-size: 12px;
+	flex: 1;
+}
+
+.landing-project-actions {
+	display: flex;
+	gap: 2px;
+	visibility: hidden;
+}
+
+.landing-project:hover .landing-project-actions {
+	visibility: visible;
+}
+
+.landing-action {
+	background: none;
+	border: none;
+	padding: 2px 7px;
+	font-size: 12px;
+	font-family: inherit;
+	cursor: pointer;
+	border-radius: 3px;
+	color: var(--vscode-textLink-foreground);
+}
+
+.landing-action:hover {
+	background-color: var(--vscode-toolbar-hoverBackground);
+}

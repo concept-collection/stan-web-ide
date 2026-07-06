@@ -1,0 +1,81 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout stan-web-ide
+        uses: actions/checkout@v4
+        with:
+          path: stan-web-ide
+
+      # minwebide is consumed as a sibling checkout (file:../minwebide)
+      - name: Checkout minwebide
+        uses: actions/checkout@v4
+        with:
+          repository: magland/minwebide
+          path: minwebide
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # the pinned VS Code source checkout is large; cache it by pinned version
+      - name: Cache VS Code source
+        uses: actions/cache@v4
+        with:
+          path: minwebide/vendor/vscode
+          key: vscode-vendor-${{ hashFiles('minwebide/.vscode-version') }}
+
+      - name: Install minwebide (fetches VS Code source on postinstall)
+        working-directory: minwebide
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: npm ci
+
+      - name: Install stan-web-ide
+        working-directory: stan-web-ide
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: npm ci
+
+      - name: Build
+        working-directory: stan-web-ide
+        env:
+          DEPLOY_BASE: /stan-web-ide/
+        run: npm run build
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: stan-web-ide/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

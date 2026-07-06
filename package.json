@@ -1,0 +1,26 @@
+{
+  "name": "stan-web-ide",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "bash scripts/typecheck.sh",
+    "smoke": "npm run build && node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "mcmc-stats": "^0.0.1",
+    "minwebide": "file:../minwebide",
+    "stan-language-server": "^0.4.9",
+    "tinystan": "^0.3.3",
+    "vscode-languageserver": "^9.0.1",
+    "yaml": "^2.8.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.1",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0"
+  }
+}

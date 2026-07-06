@@ -1,0 +1,93 @@
+/* Small modal for the compile-server URL setting. */
+
+.server-dialog-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 100;
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	padding-top: 12vh;
+	background-color: rgba(0, 0, 0, 0.35);
+}
+
+.server-dialog {
+	width: 520px;
+	max-width: calc(100vw - 40px);
+	padding: 16px 18px;
+	border-radius: 6px;
+	background-color: var(--vscode-editorWidget-background, #252526);
+	color: var(--vscode-foreground);
+	border: 1px solid var(--vscode-editorWidget-border, #454545);
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+	font-family: system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+	font-size: 13px;
+}
+
+.server-dialog h3 {
+	margin: 0 0 8px;
+	font-size: 15px;
+	font-weight: 500;
+}
+
+.server-dialog p {
+	margin: 0 0 10px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.server-dialog code {
+	font-family: var(--monaco-monospace-font, monospace);
+	font-size: 12px;
+	background-color: var(--vscode-textCodeBlock-background, rgba(255, 255, 255, 0.08));
+	padding: 1px 4px;
+	border-radius: 3px;
+	user-select: all;
+}
+
+.server-dialog input {
+	width: 100%;
+	padding: 5px 7px;
+	margin-bottom: 12px;
+	font-size: 13px;
+	font-family: inherit;
+	color: var(--vscode-input-foreground);
+	background-color: var(--vscode-input-background);
+	border: 1px solid var(--vscode-input-border, transparent);
+	border-radius: 2px;
+	outline: none;
+	box-sizing: border-box;
+}
+
+.server-dialog input:focus {
+	border-color: var(--vscode-focusBorder);
+}
+
+.server-dialog-buttons {
+	display: flex;
+	gap: 8px;
+	justify-content: flex-end;
+}
+
+.server-dialog-buttons button {
+	padding: 5px 14px;
+	font-size: 13px;
+	font-family: inherit;
+	cursor: pointer;
+	border-radius: 3px;
+	border: 1px solid var(--vscode-button-border, transparent);
+	background-color: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+}
+
+.server-dialog-buttons button:hover {
+	background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.server-dialog-buttons button.primary {
+	background-color: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+}
+
+.server-dialog-buttons button.primary:hover {
+	background-color: var(--vscode-button-hoverBackground);
+}
