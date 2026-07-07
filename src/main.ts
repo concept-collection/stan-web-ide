@@ -1,18 +1,26 @@
-import { loadBuiltinTheme, registerBuiltinLanguages } from 'minwebide';
-import { openGitHubRoute } from './githubOpen';
-import { openIde } from './ide';
-import { renderLanding } from './landing';
+import { loadBuiltinTheme, registerBuiltinLanguages, startProjectApp, type ProjectAppConfig } from 'minwebide';
+import { openStanWorkbench } from './ide';
 import { registerStanLanguage } from './stan/language';
 import { registerStanLsp } from './stan/lsp';
-import { getProject } from './projects';
+import { emptyWorkspace, sampleWorkspace } from './sampleWorkspace';
 
-// Routes:
-//   #/                     project picker (landing page)
-//   #/project/<id>         the IDE, opened on that project's file system
-//   #/github/<spec>        a GitHub repo as its own workspace (owner/repo[@ref],
-//                          or a URL-encoded github.com URL); imports on first
-//                          visit, then keeps a local editable copy — the URL
-//                          stays on this route and no project is created
+const config: ProjectAppConfig = {
+	appId: 'stan-web-ide',
+	appName: 'stan web IDE',
+	assembleWorkbench: openStanWorkbench,
+	startingFiles: ['/fit.sample', '/main.stan', '/README.md'],
+	landing: {
+		subtitle: 'Run Stan sampling in your browser. Projects are stored locally, in your browser.',
+		links: [
+			{ label: 'mc-stan.org', href: 'https://mc-stan.org' },
+			{ label: 'stan-playground', href: 'https://stan-playground.flatironinstitute.org' },
+			{ label: 'github.com/concept-collection/stan-web-ide', href: 'https://github.com/concept-collection/stan-web-ide' },
+		],
+		sampleWorkspace,
+		sampleButtonTitle: 'Seeded with a linear-regression model, data, and ready-to-run .sample configs',
+		emptyWorkspace: () => emptyWorkspace,
+	},
+};
 
 async function start(): Promise<void> {
 	// this app no longer uses a service worker (pure-WASI sampling needs no
@@ -30,8 +38,6 @@ async function start(): Promise<void> {
 		}
 	}
 
-	const app = document.getElementById('app')!;
-
 	// one-time global setup: theme + languages are shared by all views;
 	// Stan registers last so it owns .stan (and .sample maps to YAML)
 	const theme = await loadBuiltinTheme('dark_modern');
@@ -41,43 +47,7 @@ async function start(): Promise<void> {
 	// in one worker for the whole session, across projects
 	registerStanLsp();
 
-	let current: { dispose(): void } | undefined;
-	let navigating = false;
-
-	const route = async () => {
-		if (navigating) {
-			return;
-		}
-		navigating = true;
-		try {
-			current?.dispose();
-			current = undefined;
-			app.textContent = '';
-
-			const github = location.hash.match(/^#\/github\/(.+)$/);
-			if (github) {
-				current = await openGitHubRoute(app, decodeURIComponent(github[1]), theme);
-				return;
-			}
-
-			const match = location.hash.match(/^#\/project\/([a-z0-9]+)/i);
-			if (match) {
-				const project = getProject(match[1]);
-				if (project) {
-					current = await openIde(app, project, theme);
-					return;
-				}
-				// unknown project id: fall through to the landing page
-				history.replaceState(null, '', '#/');
-			}
-			current = renderLanding(app, theme);
-		} finally {
-			navigating = false;
-		}
-	};
-
-	window.addEventListener('hashchange', route);
-	await route();
+	await startProjectApp(document.getElementById('app')!, theme, config);
 }
 
 start();
