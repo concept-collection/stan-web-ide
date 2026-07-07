@@ -1,36 +1,33 @@
-import { createWorkbench, type WorkbenchTheme } from 'minwebide';
+import { attachGitHubSourceControl, createWorkbench, type Workbench, type WorkbenchTheme, type WorkspaceFileSystem } from 'minwebide';
 import { createCsvTableProvider } from './csvTable';
 import { openProjectFileSystem, touchProject, type ProjectInfo } from './projects';
+import { createResultsViewProvider } from './stan/resultsView';
 import { createStanRunner } from './stan/runner';
 import { createSampleEditorProvider } from './stan/sampleEditor';
 import { showServerDialog } from './stan/serverDialog';
 import { getServerUrl, onDidChangeServerUrl, probeServer } from './stan/settings';
 
-/** Opens the IDE for a project. Returns a disposable view. */
-export async function openIde(container: HTMLElement, project: ProjectInfo, theme: WorkbenchTheme): Promise<{ dispose(): void }> {
-	touchProject(project.id);
-	document.title = `${project.name} — stan web IDE`;
+export interface StanWorkbench {
+	readonly workbench: Workbench;
+	dispose(): void;
+}
 
-	const fs = await openProjectFileSystem(project.id);
-	const stan = createStanRunner(fs);
-
+/**
+ * Assembles the Stan workbench (runner, custom editors, compile-server status
+ * item) on a file system. Shared by project IDEs and GitHub repo IDEs; does
+ * not own `fs` — the caller disposes it.
+ */
+export async function openStanWorkbench(container: HTMLElement, fs: WorkspaceFileSystem, workspaceName: string, theme: WorkbenchTheme): Promise<StanWorkbench> {
 	const workbench = createWorkbench(container, {
 		fileSystem: fs,
 		theme,
-		workspaceName: project.name,
+		workspaceName,
 	});
+	const stan = createStanRunner(fs, (path) => workbench.openFile(fs.root.with({ path })));
 	workbench.registerRunner(stan.runner);
 	workbench.registerCustomEditor(createSampleEditorProvider(fs, workbench, { stop: stan.stop }));
+	workbench.registerCustomEditor(createResultsViewProvider(fs));
 	workbench.registerCustomEditor(createCsvTableProvider());
-
-	// the project indicator: click to go back to the project list
-	workbench.statusBar.setItem('project', 'left', project.name, {
-		icon: 'folder-opened',
-		title: 'Back to projects',
-		onClick: () => { location.hash = '#/'; },
-	});
-	// replace the default branding item with the project indicator
-	workbench.statusBar.removeItem('branding');
 
 	// compile-server status: shows connectivity, click to change the URL
 	let disposed = false;
@@ -54,21 +51,60 @@ export async function openIde(container: HTMLElement, project: ProjectInfo, them
 	void refreshServerItem();
 	const serverListener = onDidChangeServerUrl(() => void refreshServerItem());
 
-	// open the most useful starting file
-	for (const path of ['/fit.sample', '/main.stan', '/README.md']) {
-		const uri = fs.root.with({ path });
-		if (await fs.fileService.exists(uri)) {
-			await workbench.openFile(uri);
-			break;
-		}
-	}
-
 	return {
+		workbench,
 		dispose() {
 			disposed = true;
 			serverListener.dispose();
 			stan.dispose();
 			workbench.dispose();
+		},
+	};
+}
+
+/** Opens the most useful starting file, if any. */
+export async function openStartingFile(fs: WorkspaceFileSystem, workbench: Workbench): Promise<void> {
+	for (const path of ['/fit.sample', '/main.stan', '/README.md']) {
+		const uri = fs.root.with({ path });
+		if (await fs.fileService.exists(uri)) {
+			await workbench.openFile(uri);
+			return;
+		}
+	}
+}
+
+/** Opens the IDE for a project. Returns a disposable view. */
+export async function openIde(container: HTMLElement, project: ProjectInfo, theme: WorkbenchTheme): Promise<{ dispose(): void }> {
+	touchProject(project.id);
+	document.title = `${project.name} — stan web IDE`;
+
+	const fs = await openProjectFileSystem(project.id);
+	const ide = await openStanWorkbench(container, fs, project.name, theme);
+
+	// the project indicator: click to go back to the project list
+	ide.workbench.statusBar.setItem('project', 'left', project.name, {
+		icon: 'folder-opened',
+		title: 'Back to projects',
+		onClick: () => { location.hash = '#/'; },
+	});
+	// replace the default branding item with the project indicator
+	ide.workbench.statusBar.removeItem('branding');
+
+	// source control: publish this project to a new GitHub repo, or — once
+	// published — track changes and push
+	const sourceControl = await attachGitHubSourceControl(ide.workbench, fs, {
+		appName: 'stan web IDE',
+		defaultRepoName: project.name,
+		// after publishing, the repo's own route is the canonical place to work
+		onPublished: ({ owner, repo }) => { location.hash = `#/github/${owner}/${repo}`; },
+	});
+
+	await openStartingFile(fs, ide.workbench);
+
+	return {
+		dispose() {
+			sourceControl.dispose();
+			ide.dispose();
 			fs.dispose();
 		},
 	};

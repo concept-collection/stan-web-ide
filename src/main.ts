@@ -1,4 +1,5 @@
 import { loadBuiltinTheme, registerBuiltinLanguages } from 'minwebide';
+import { openGitHubRoute } from './githubOpen';
 import { openIde } from './ide';
 import { renderLanding } from './landing';
 import { registerStanLanguage } from './stan/language';
@@ -8,13 +9,17 @@ import { getProject } from './projects';
 // Routes:
 //   #/                     project picker (landing page)
 //   #/project/<id>         the IDE, opened on that project's file system
+//   #/github/<spec>        a GitHub repo as its own workspace (owner/repo[@ref],
+//                          or a URL-encoded github.com URL); imports on first
+//                          visit, then keeps a local editable copy — the URL
+//                          stays on this route and no project is created
 
 async function start(): Promise<void> {
-	// dev never uses a service worker (isolation comes from server headers) —
-	// unregister any stale coi-serviceworker left over from a production
-	// build or an earlier version, since a controlling stale SW can block
-	// module workers with mismatched COEP headers
-	if (import.meta.env.DEV && 'serviceWorker' in navigator) {
+	// this app no longer uses a service worker (pure-WASI sampling needs no
+	// cross-origin isolation) — unregister the coi-serviceworker that earlier
+	// deployed versions registered, since a stale controlling SW keeps
+	// rewriting response headers
+	if ('serviceWorker' in navigator) {
 		const registrations = await navigator.serviceWorker.getRegistrations();
 		if (registrations.length > 0) {
 			await Promise.all(registrations.map(r => r.unregister()));
@@ -48,6 +53,12 @@ async function start(): Promise<void> {
 			current?.dispose();
 			current = undefined;
 			app.textContent = '';
+
+			const github = location.hash.match(/^#\/github\/(.+)$/);
+			if (github) {
+				current = await openGitHubRoute(app, decodeURIComponent(github[1]), theme);
+				return;
+			}
 
 			const match = location.hash.match(/^#\/project\/([a-z0-9]+)/i);
 			if (match) {
