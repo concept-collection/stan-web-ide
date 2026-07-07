@@ -1,4 +1,5 @@
 import { createWorkbench, type WorkbenchTheme } from 'minwebide';
+import { createCsvTableProvider } from './csvTable';
 import { openProjectFileSystem, touchProject, type ProjectInfo } from './projects';
 import { createStanRunner } from './stan/runner';
 import { createSampleEditorProvider } from './stan/sampleEditor';
@@ -20,6 +21,7 @@ export async function openIde(container: HTMLElement, project: ProjectInfo, them
 	});
 	workbench.registerRunner(stan.runner);
 	workbench.registerCustomEditor(createSampleEditorProvider(fs, workbench, { stop: stan.stop }));
+	workbench.registerCustomEditor(createCsvTableProvider());
 
 	// the project indicator: click to go back to the project list
 	workbench.statusBar.setItem('project', 'left', project.name, {

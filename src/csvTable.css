@@ -1,0 +1,88 @@
+/* The CSV table view, themed with --vscode-* variables. */
+
+.csv-view {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	background-color: var(--vscode-editor-background);
+	color: var(--vscode-foreground);
+	font-family: system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+	font-size: 13px;
+}
+
+.csv-view-meta {
+	flex: none;
+	padding: 4px 12px;
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+	border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.csv-view-scroll {
+	flex: 1;
+	overflow: auto;
+}
+
+.csv-table {
+	border-collapse: collapse;
+	font-variant-numeric: tabular-nums;
+}
+
+.csv-table th,
+.csv-table td {
+	padding: 3px 10px;
+	border-right: 1px solid var(--vscode-panel-border);
+	white-space: nowrap;
+	max-width: 480px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	text-align: left;
+}
+
+.csv-table th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	background-color: var(--vscode-editorGroupHeader-tabsBackground, #252526);
+	border-bottom: 1px solid var(--vscode-panel-border);
+	font-weight: 600;
+	cursor: pointer;
+	user-select: none;
+}
+
+.csv-table th:hover {
+	background-color: var(--vscode-list-hoverBackground);
+}
+
+.csv-table th .csv-sort {
+	margin-left: 4px;
+	color: var(--vscode-descriptionForeground);
+	font-size: 10px;
+}
+
+.csv-table td.num,
+.csv-table th.num {
+	text-align: right;
+}
+
+.csv-table td.csv-rownum,
+.csv-table th.csv-rownum {
+	color: var(--vscode-editorLineNumber-foreground, #858585);
+	text-align: right;
+	background-color: var(--vscode-editor-background);
+	cursor: default;
+	font-size: 11px;
+}
+
+.csv-table tbody tr:nth-child(even) {
+	background-color: var(--vscode-keybindingTable-rowsBackground, rgba(128, 128, 128, 0.04));
+}
+
+.csv-table tbody tr:hover {
+	background-color: var(--vscode-list-hoverBackground);
+}
+
+.csv-view-empty {
+	padding: 16px;
+	color: var(--vscode-descriptionForeground);
+}

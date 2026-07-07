@@ -119,11 +119,22 @@ try {
 		await page.waitForTimeout(400);
 		check('chain_1.csv written', await explorerItem('chain_1.csv').count() === 1);
 		check('summary.csv written', await explorerItem('summary.csv').count() === 1);
+		// summary.csv opens as the CSV table view
 		await explorerItem('summary.csv').click();
 		await page.waitForTimeout(800);
-		const summary = normalize(await page.locator('.view-lines').first().innerText());
-		check('summary has beta row', summary.includes('beta'));
+		const summaryTable = page.locator('.csv-view:visible');
+		check('summary opens as csv table', await summaryTable.locator('.csv-table').count() === 1);
+		check('summary table has beta row', await summaryTable.locator('td', { hasText: /^beta$/ }).count() === 1);
+		check('summary table meta shows rows', (await summaryTable.locator('.csv-view-meta').innerText()).includes('rows × 10 columns'));
+		// click-to-sort by rhat
+		await summaryTable.locator('th', { hasText: /^rhat/ }).click();
+		await page.waitForTimeout(300);
+		check('sort by rhat', (await summaryTable.locator('.csv-view-meta').innerText()).includes('sorted by rhat'));
 		await page.screenshot({ path: out + '/s-summary.png' });
+		// a draws file renders too (1000 rows)
+		await explorerItem('chain_1.csv').click();
+		await page.waitForTimeout(800);
+		check('chain csv shows 1,000 rows', (await page.locator('.csv-view:visible .csv-view-meta').innerText()).includes('1,000 rows'));
 
 		// form edit round-trip: bump quick.sample's num_samples, run, check
 		// the recorded sampling_opts.json (proves form → YAML → runner)
