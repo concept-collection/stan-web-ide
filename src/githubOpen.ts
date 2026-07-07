@@ -10,6 +10,12 @@ import './landing.css';
 // Source Control view tracking changes against the imported commit (and
 // offering "Reload from GitHub" to start fresh).
 
+/** The per-repo workspace database backing a #/github route. */
+export function githubWorkspaceDbName(spec: { owner: string; repo: string; ref?: string; dir?: string }): string {
+	return `stan-web-ide-gh-${spec.owner}-${spec.repo}${spec.ref ? `-${spec.ref}` : ''}${spec.dir ? `-${spec.dir}` : ''}`
+		.toLowerCase().replace(/[^a-z0-9._-]/g, '-');
+}
+
 /** Handles a #/github/<spec> route. Returns a disposable view (the IDE, or an error screen). */
 export async function openGitHubRoute(container: HTMLElement, specText: string, theme: WorkbenchTheme): Promise<{ dispose(): void }> {
 	let fs: Awaited<ReturnType<typeof createIndexedDBFileSystem>> | undefined;
@@ -18,10 +24,8 @@ export async function openGitHubRoute(container: HTMLElement, specText: string, 
 		const spec = parseGitHubSpec(specText);
 		const name = `${spec.owner}/${spec.repo}`;
 		document.title = `${name} — stan web IDE`;
-		const dbName = `stan-web-ide-gh-${spec.owner}-${spec.repo}${spec.ref ? `-${spec.ref}` : ''}${spec.dir ? `-${spec.dir}` : ''}`
-			.toLowerCase().replace(/[^a-z0-9._-]/g, '-');
 
-		fs = await createIndexedDBFileSystem({ dbName });
+		fs = await createIndexedDBFileSystem({ dbName: githubWorkspaceDbName(spec) });
 		ide = await openStanWorkbench(container, fs, name, theme);
 		ide.workbench.statusBar.removeItem('branding');
 		ide.workbench.statusBar.setItem('project', 'left', 'Projects', {

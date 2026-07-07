@@ -1,4 +1,5 @@
-import { attachGitHubSourceControl, createWorkbench, type Workbench, type WorkbenchTheme, type WorkspaceFileSystem } from 'minwebide';
+import { attachGitHubSourceControl, createIndexedDBFileSystem, createWorkbench, transplantGitHubWorkspace, type Workbench, type WorkbenchTheme, type WorkspaceFileSystem } from 'minwebide';
+import { githubWorkspaceDbName } from './githubOpen';
 import { createCsvTableProvider } from './csvTable';
 import { openProjectFileSystem, touchProject, type ProjectInfo } from './projects';
 import { createResultsViewProvider } from './stan/resultsView';
@@ -95,8 +96,18 @@ export async function openIde(container: HTMLElement, project: ProjectInfo, them
 	const sourceControl = await attachGitHubSourceControl(ide.workbench, fs, {
 		appName: 'stan web IDE',
 		defaultRepoName: project.name,
-		// after publishing, the repo's own route is the canonical place to work
-		onPublished: ({ owner, repo }) => { location.hash = `#/github/${owner}/${repo}`; },
+		// after publishing, seed the repo's own workspace from the local copy
+		// (no re-download — the local state IS the pushed state) and make its
+		// route the canonical place to work
+		onPublished: async ({ owner, repo }) => {
+			const ghFs = await createIndexedDBFileSystem({ dbName: githubWorkspaceDbName({ owner, repo }) });
+			try {
+				await transplantGitHubWorkspace(fs, ghFs);
+			} finally {
+				ghFs.dispose();
+			}
+			location.hash = `#/github/${owner}/${repo}`;
+		},
 	});
 
 	await openStartingFile(fs, ide.workbench);
