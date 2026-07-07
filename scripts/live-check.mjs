@@ -12,9 +12,8 @@ const check = (name, ok) => console.log(`${ok ? 'OK  ' : 'FAIL'} ${name}`);
 
 try {
 	await page.goto(base, { waitUntil: 'networkidle' });
-	// the coi-serviceworker registers and reloads once on first visit
+	// returning visitors unregister the old coi-serviceworker and reload once
 	await page.waitForTimeout(3500);
-	check('cross-origin isolated', await page.evaluate(() => window.crossOriginIsolated));
 	check('landing renders', await page.locator('.landing-header').count() === 1);
 	await page.screenshot({ path: out + '/live-landing.png' });
 
@@ -37,8 +36,8 @@ try {
 	check('LSP diagnostics live', sawMarker);
 	await page.screenshot({ path: out + '/live-ide.png' });
 
-	// the status bar should show the compile server as offline (localhost
-	// default doesn't apply to the Pages origin)
+	// the status bar shows the compile server (default: the hosted
+	// stan-wasm-wasi instance, reachable from any origin)
 	const statusText = (await page.locator('.mw-statusbar').innerText()).replace(/\u00a0/g, ' ');
 	check('server status item present', statusText.includes('Stan server:'));
 

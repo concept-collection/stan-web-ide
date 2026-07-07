@@ -1,20 +1,21 @@
 import { monaco, type FileRunner, type RunContext, type WorkspaceFileSystem } from 'minwebide';
 import { compileStanProgram } from './compile';
 import { writeRunOutputs } from './outputs';
-import type { StanSampleConfig, WorkerResponse } from './protocol';
+import type { ChainRunConfig, WorkerResponse } from './protocol';
 import { setRunState, updateChainProgress } from './runEvents';
-import { dirnameOf, parseSampleFile, resolveProjectPath, type SampleFileConfig } from './sampleConfig';
+import { dirnameOf, outputDirFor, parseSampleFile, resolveProjectPath, type SampleFileConfig } from './sampleConfig';
 import { getServerUrl } from './settings';
 
 // The .sample runner: compile the referenced Stan program on the compile
-// server, run NUTS-HMC sampling in a web worker (tinystan), stream progress
-// to the output channel (and to the .sample view's progress bars via
+// server (to a pure-WASI module), run NUTS-HMC sampling locally — one web
+// worker per chain, each invoking the module CLI-style — stream progress to
+// the output channel (and to the .sample view's progress bars via
 // runEvents), then write draws + summary into the output directory.
 
 interface ActiveRun {
 	uriKey: string;
-	worker: Worker;
-	/** Resolves the run() promise; the worker is terminated afterwards. */
+	workers: Worker[];
+	/** Resolves the run() promise; the workers are terminated afterwards. */
 	finish: () => void;
 	stopped: boolean;
 }
@@ -26,7 +27,7 @@ export interface StanRunner {
 	dispose(): void;
 }
 
-export function createStanRunner(fs: WorkspaceFileSystem): StanRunner {
+export function createStanRunner(fs: WorkspaceFileSystem, openFile: (path: string) => Promise<unknown>): StanRunner {
 	let active: ActiveRun | undefined;
 
 	const run = async ({ uri, getText, output }: RunContext): Promise<void> => {
@@ -52,17 +53,15 @@ export function createStanRunner(fs: WorkspaceFileSystem): StanRunner {
 			return;
 		}
 
-		// 2. referenced files
+		// 2. referenced files; the output directory is derived from the
+		// .sample file's name (fit.sample → fit.out next to it)
 		const sampleDir = dirnameOf(uri.path);
 		const stanPath = resolveProjectPath(sampleDir, config.stan!);
 		const dataPath = resolveProjectPath(sampleDir, config.data!);
-		const outputDir = resolveProjectPath(sampleDir, config.output_dir!);
-		if (outputDir === '/') {
-			return fail("'output_dir' must not be the project root (its contents are replaced on each run)");
-		}
-		for (const [name, path] of [['.sample file', uri.path], ['stan file', stanPath], ['data file', dataPath]] as const) {
+		const outputDir = outputDirFor(uri.path);
+		for (const [name, path] of [['stan file', stanPath], ['data file', dataPath]] as const) {
 			if (path === outputDir || path.startsWith(`${outputDir}/`)) {
-				return fail(`'output_dir' (${outputDir}) would overwrite the ${name} (${path})`);
+				return fail(`the output directory (${outputDir}) would overwrite the ${name} (${path}) — move it out of ${outputDir}`);
 			}
 		}
 
@@ -88,109 +87,158 @@ export function createStanRunner(fs: WorkspaceFileSystem): StanRunner {
 			output.info(`[compile] ${status}`);
 			setRunState(uriKey, { phase: 'compiling', message: status });
 		});
-		if (!compiled.mainJsUrl) {
+		if (!compiled.mainWasmUrl) {
 			return fail(compiled.error ?? 'compilation failed');
 		}
 
-		// 4. sample in a fresh worker
-		const seed = config.seed ?? Math.floor(Math.random() * Math.pow(2, 32));
-		const sampleConfig: StanSampleConfig = {
-			data: dataText,
-			num_chains: config.num_chains,
-			num_warmup: config.num_warmup,
-			num_samples: config.num_samples,
-			init_radius: config.init_radius,
-			seed,
-			refresh: reasonableRefreshRate(config),
-			// one thread per chain: chains run in parallel (issue mirrors
-			// stan-playground's setting)
-			num_threads: config.num_chains,
-		};
-
+		// 4. download + compile the wasm module once; WebAssembly.Module is
+		// structured-cloneable, so the chain workers share the compiled code
 		setRunState(uriKey, { phase: 'loading', message: 'loading model...' });
-		const worker = new Worker(new URL('./samplerWorker.ts', import.meta.url), { type: 'module' });
+		let module: WebAssembly.Module;
+		let moduleBytes = 0;
+		try {
+			const response = await fetch(compiled.mainWasmUrl);
+			if (!response.ok) {
+				return fail(`failed to download compiled model: ${response.status} ${response.statusText}`);
+			}
+			const buffer = await response.arrayBuffer();
+			moduleBytes = buffer.byteLength;
+			module = await WebAssembly.compile(buffer);
+		} catch (error) {
+			return fail(`failed to load compiled model: ${error}`);
+		}
+
+		// 5. sample: one worker per chain (CmdStan convention — same seed,
+		// chain ids 1..n differentiate the streams)
+		const seed = config.seed ?? Math.floor(Math.random() * Math.pow(2, 32));
+		output.info(`model loaded (${(moduleBytes / 1024).toFixed(0)} kB wasm); sampling: ${config.num_chains} chains × (${config.num_warmup} warmup + ${config.num_samples} samples), seed ${seed}`);
+		setRunState(uriKey, { phase: 'sampling', message: 'sampling...' });
+
+		const workers = Array.from({ length: config.num_chains }, () =>
+			new Worker(new URL('./samplerWorker.ts', import.meta.url), { type: 'module' }));
+		const chainResults: ({ paramNames: string[]; draws: number[][] } | undefined)[] = new Array(config.num_chains);
 		const consoleLines: string[] = [];
-		let samplingStarted = 0;
-		let computeTimeSec = 0;
+		let failed = false;
+		const samplingStarted = performance.now();
 
+		const current: ActiveRun = { uriKey, workers, finish: () => {}, stopped: false };
 		await new Promise<void>((resolve) => {
-			const current: ActiveRun = { uriKey, worker, finish: resolve, stopped: false };
+			current.finish = resolve;
 			active = current;
+			let remaining = config.num_chains;
 
-			worker.onmessage = async (event: MessageEvent<WorkerResponse>) => {
-				if (current.stopped) {
-					return;
-				}
-				const message = event.data;
-				switch (message.type) {
-					case 'loaded': {
-						output.info(`model loaded (Stan v${message.stanVersion}); sampling: ${config.num_chains} chains × (${config.num_warmup} warmup + ${config.num_samples} samples), seed ${seed}`);
-						setRunState(uriKey, { phase: 'sampling', message: 'sampling...' });
-						samplingStarted = performance.now();
-						worker.postMessage({ type: 'sample', config: sampleConfig });
-						break;
+			workers.forEach((worker, index) => {
+				const chainId = index + 1;
+				worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
+					if (current.stopped || failed) {
+						return;
 					}
-					case 'progress': {
-						const r = message.report;
-						updateChainProgress(uriKey, config.num_chains, r);
-						const line = `Chain ${r.chain} Iteration: ${r.iteration} / ${r.totalIterations} [${String(r.percent).padStart(3)}%] (${r.warmup ? 'Warmup' : 'Sampling'})`;
-						consoleLines.push(line);
-						output.appendLine(line);
-						break;
-					}
-					case 'console': {
-						consoleLines.push(message.text);
-						output.appendLine(message.text);
-						break;
-					}
-					case 'done': {
-						computeTimeSec = (performance.now() - samplingStarted) / 1000;
-						setRunState(uriKey, { phase: 'writing', message: 'writing outputs...' });
-						try {
-							const written = await writeRunOutputs(fs, outputDir, {
-								draws: message.draws,
-								paramNames: message.paramNames,
-								numChains: config.num_chains,
-								consoleText: consoleLines.join('\n') + '\n',
-								samplingOpts: {
-									stan: stanPath,
-									data: dataPath,
-									output_dir: outputDir,
-									num_chains: config.num_chains,
-									num_warmup: config.num_warmup,
-									num_samples: config.num_samples,
-									init_radius: config.init_radius,
-									seed,
-									compute_time_sec: Number(computeTimeSec.toFixed(3)),
-								},
-								computeTimeSec,
-							});
-							output.info(`sampling completed in ${computeTimeSec.toFixed(2)}s — wrote ${written.length} files to ${outputDir}`);
-							setRunState(uriKey, { phase: 'done', message: `completed in ${computeTimeSec.toFixed(2)}s → ${outputDir}`, computeTimeSec });
-						} catch (error) {
-							fail(`failed to write outputs: ${error}`);
+					const message = event.data;
+					switch (message.type) {
+						case 'progress': {
+							const r = message.report;
+							updateChainProgress(uriKey, config.num_chains, r);
+							const line = `Chain ${r.chain} Iteration: ${r.iteration} / ${r.totalIterations} [${String(r.percent).padStart(3)}%] (${r.warmup ? 'Warmup' : 'Sampling'})`;
+							consoleLines.push(line);
+							output.appendLine(line);
+							break;
 						}
-						resolve();
-						break;
+						case 'console': {
+							const line = config.num_chains > 1 ? `[chain ${chainId}] ${message.text}` : message.text;
+							consoleLines.push(line);
+							output.appendLine(line);
+							break;
+						}
+						case 'done': {
+							chainResults[index] = { paramNames: message.paramNames, draws: message.draws };
+							remaining -= 1;
+							if (remaining === 0) {
+								resolve();
+							}
+							break;
+						}
+						case 'error': {
+							failed = true;
+							fail(message.message);
+							resolve();
+							break;
+						}
 					}
-					case 'error': {
-						fail(message.message);
+				};
+				worker.onerror = (event) => {
+					if (!current.stopped && !failed) {
+						failed = true;
+						fail(`worker error: ${event.message ?? 'failed to load'}`);
 						resolve();
-						break;
 					}
-				}
-			};
-			worker.onerror = (event) => {
-				fail(`worker error: ${event.message ?? 'failed to load'}`);
-				resolve();
-			};
-			worker.postMessage({ type: 'load', mainJsUrl: compiled.mainJsUrl });
+				};
+				const chainConfig: ChainRunConfig = {
+					data: dataText,
+					seed,
+					chainId,
+					numWarmup: config.num_warmup,
+					numSamples: config.num_samples,
+					initRadius: config.init_radius,
+					refresh: reasonableRefreshRate(config),
+				};
+				worker.postMessage({ type: 'run', module, config: chainConfig });
+			});
 		}).finally(() => {
-			worker.terminate();
-			if (active?.worker === worker) {
+			for (const worker of workers) {
+				worker.terminate();
+			}
+			if (active === current) {
 				active = undefined;
 			}
 		});
+
+		if (current.stopped || failed) {
+			return; // already reported
+		}
+		if (chainResults.some((result) => !result)) {
+			return; // finished early without all chains (e.g. disposed mid-run)
+		}
+
+		// 6. merge chains and write outputs: draws[param][draw], chains
+		// concatenated along the draw axis (the layout outputs.ts expects)
+		const computeTimeSec = (performance.now() - samplingStarted) / 1000;
+		const results = chainResults as { paramNames: string[]; draws: number[][] }[];
+		const paramNames = results[0].paramNames;
+		const draws = paramNames.map((_, p) => {
+			const merged: number[] = [];
+			for (const chain of results) {
+				merged.push(...chain.draws[p]);
+			}
+			return merged;
+		});
+
+		setRunState(uriKey, { phase: 'writing', message: 'writing outputs...' });
+		try {
+			const written = await writeRunOutputs(fs, outputDir, {
+				draws,
+				paramNames,
+				numChains: config.num_chains,
+				consoleText: consoleLines.join('\n') + '\n',
+				samplingOpts: {
+					stan: stanPath,
+					data: dataPath,
+					output_dir: outputDir,
+					num_chains: config.num_chains,
+					num_warmup: config.num_warmup,
+					num_samples: config.num_samples,
+					init_radius: config.init_radius,
+					seed,
+					compute_time_sec: Number(computeTimeSec.toFixed(3)),
+				},
+				computeTimeSec,
+			});
+			output.info(`sampling completed in ${computeTimeSec.toFixed(2)}s — wrote ${written.length} files to ${outputDir}`);
+			setRunState(uriKey, { phase: 'done', message: `completed in ${computeTimeSec.toFixed(2)}s → ${outputDir}`, computeTimeSec });
+			// open (or refresh) the results dashboard
+			openFile(`${outputDir}/run.json`).catch(() => {});
+		} catch (error) {
+			fail(`failed to write outputs: ${error}`);
+		}
 	};
 
 	const stop = (): void => {
@@ -216,9 +264,9 @@ export function createStanRunner(fs: WorkspaceFileSystem): StanRunner {
 	};
 }
 
-/** Progress lines roughly every 2.5% of total iterations (min every 15). */
+/** Progress lines roughly every 2.5% of a chain's iterations (min every 15). */
 function reasonableRefreshRate(config: SampleFileConfig): number {
-	const total = (config.num_samples + config.num_warmup) * config.num_chains;
+	const total = config.num_samples + config.num_warmup;
 	const nearestTen = Math.round(Math.floor(total / 40) / 10) * 10;
 	return Math.max(15, nearestTen);
 }

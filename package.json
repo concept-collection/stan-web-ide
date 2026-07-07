@@ -13,8 +13,8 @@
   "dependencies": {
     "mcmc-stats": "^0.0.1",
     "minwebide": "file:../minwebide",
+    "plotly.js-basic-dist-min": "^3.7.0",
     "stan-language-server": "^0.4.9",
-    "tinystan": "^0.3.3",
     "vscode-languageserver": "^9.0.1",
     "yaml": "^2.8.0"
   },

@@ -1,6 +1,6 @@
 import { monaco, type CustomEditorProvider, type Workbench, type WorkspaceFileSystem } from 'minwebide';
 import { getRunState, onDidChangeRunState, type RunState } from './runEvents';
-import { dirnameOf, parseSampleFile, samplingDefaults, updateSampleYaml } from './sampleConfig';
+import { dirnameOf, outputDirFor, parseSampleFile, samplingDefaults, updateSampleYaml } from './sampleConfig';
 import './sampleEditor.css';
 
 // The default view for .sample files: a form over the YAML (shared text
@@ -29,11 +29,39 @@ export function createSampleEditorProvider(fs: WorkspaceFileSystem, workbench: W
 
 			const fileName = doc.uri.path.split('/').pop() ?? doc.uri.path;
 			inner.appendChild(el('h2', undefined, fileName));
-			inner.appendChild(el('p', 'sample-editor-subtitle', 'A sampling run: the Stan program, the data, sampling parameters, and where results go. This form edits the underlying YAML (tab menu → Reopen as Text Editor).'));
+			inner.appendChild(el('p', 'sample-editor-subtitle', 'A sampling run: the Stan program, the data, and sampling parameters. This form edits the underlying YAML (tab menu → Reopen as Text Editor).'));
 
 			const problems = el('div', 'sample-problems');
 			problems.style.display = 'none';
 			inner.appendChild(problems);
+
+			// --- run button + progress (at the top, above the fields) ---------
+			const runRow = el('div', 'sample-run-row');
+			const runButton = el('button', 'sample-run-button', 'Run sampling');
+			runButton.addEventListener('click', () => {
+				const state = getRunState(uriKey);
+				if (isRunning(state)) {
+					stopHandle.stop();
+				} else {
+					void workbench.runFile(doc.uri);
+				}
+			});
+			// shown when the derived output dir holds a completed run
+			const runJsonPath = `${outputDirFor(doc.uri.path)}/run.json`;
+			const resultsButton = el('button', 'sample-results-button', 'View results');
+			resultsButton.style.display = 'none';
+			resultsButton.addEventListener('click', () => {
+				void workbench.openFile(fs.root.with({ path: runJsonPath }));
+			});
+			const runStatus = el('span', 'sample-run-status', '');
+			runRow.append(runButton, resultsButton, runStatus);
+			inner.appendChild(runRow);
+
+			inner.appendChild(el('p', 'sample-output-note',
+				`results are written to ${referenceFor(outputDirFor(doc.uri.path))} (replaced on each run)`));
+
+			const chainsBox = el('div', 'sample-chains');
+			inner.appendChild(chainsBox);
 
 			// --- fields ------------------------------------------------------
 			let applyingEdit = false;
@@ -52,12 +80,6 @@ export function createSampleEditorProvider(fs: WorkspaceFileSystem, workbench: W
 
 			const stanField = fileSelect('stan', 'the Stan program', '.stan');
 			const dataField = fileSelect('data', 'the data (JSON)', '.json');
-
-			const outputField = el('input');
-			outputField.type = 'text';
-			outputField.placeholder = 'e.g. out/fit1';
-			outputField.addEventListener('change', () => setKey('output_dir', outputField.value.trim() || undefined));
-			inner.appendChild(field('output_dir', 'results are written here (replaced on each run)', outputField));
 
 			const params = el('div', 'sample-params');
 			inner.appendChild(params);
@@ -91,24 +113,6 @@ export function createSampleEditorProvider(fs: WorkspaceFileSystem, workbench: W
 			const samplesInput = numberField('num_samples', 'draws per chain', { min: 1 });
 			const radiusInput = numberField('init_radius', 'init radius', { min: 0, step: '0.1' });
 			const seedInput = numberField('seed', 'random seed', { min: 0, optional: true });
-
-			// --- run button + progress ---------------------------------------
-			const runRow = el('div', 'sample-run-row');
-			const runButton = el('button', 'sample-run-button', 'Run sampling');
-			runButton.addEventListener('click', () => {
-				const state = getRunState(uriKey);
-				if (isRunning(state)) {
-					stopHandle.stop();
-				} else {
-					void workbench.runFile(doc.uri);
-				}
-			});
-			const runStatus = el('span', 'sample-run-status', '');
-			runRow.append(runButton, runStatus);
-			inner.appendChild(runRow);
-
-			const chainsBox = el('div', 'sample-chains');
-			inner.appendChild(chainsBox);
 
 			const renderRunState = (state: RunState) => {
 				const running = isRunning(state);
@@ -151,7 +155,6 @@ export function createSampleEditorProvider(fs: WorkspaceFileSystem, workbench: W
 
 				setIfNotFocused(stanField.select, config.stan ?? '');
 				setIfNotFocused(dataField.select, config.data ?? '');
-				setIfNotFocused(outputField, config.output_dir ?? '');
 				setIfNotFocused(chainsInput, String(config.num_chains));
 				setIfNotFocused(warmupInput, String(config.num_warmup));
 				setIfNotFocused(samplesInput, String(config.num_samples));
@@ -170,6 +173,7 @@ export function createSampleEditorProvider(fs: WorkspaceFileSystem, workbench: W
 				const all = await listProjectFiles(fs);
 				stanField.setOptions(all.filter(path => path.endsWith('.stan')));
 				dataField.setOptions(all.filter(path => path.endsWith('.json')));
+				resultsButton.style.display = all.includes(runJsonPath) ? '' : 'none';
 				refresh();
 			};
 			let fileListTimer: ReturnType<typeof setTimeout> | undefined;

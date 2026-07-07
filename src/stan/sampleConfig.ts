@@ -4,7 +4,6 @@ import { parse, parseDocument } from 'yaml';
 //
 //   stan: linear.stan        # the Stan program
 //   data: data.json          # the data file
-//   output_dir: out/fit1     # where results are written
 //   num_chains: 4            # optional, with stan-playground's defaults
 //   num_warmup: 1000
 //   num_samples: 1000
@@ -12,12 +11,12 @@ import { parse, parseDocument } from 'yaml';
 //   seed: 42                 # omit for a random seed
 //
 // File references are relative to the .sample file's directory; a leading
-// '/' means the project root.
+// '/' means the project root. Results go to a directory derived from the
+// file's name (see outputDirFor), not configured in the YAML.
 
 export interface SampleFileConfig {
 	stan?: string;
 	data?: string;
-	output_dir?: string;
 	num_chains: number;
 	num_warmup: number;
 	num_samples: number;
@@ -32,7 +31,16 @@ export const samplingDefaults = {
 	init_radius: 2.0,
 } as const;
 
-export const KNOWN_KEYS = ['stan', 'data', 'output_dir', 'num_chains', 'num_warmup', 'num_samples', 'init_radius', 'seed'] as const;
+export const KNOWN_KEYS = ['stan', 'data', 'num_chains', 'num_warmup', 'num_samples', 'init_radius', 'seed'] as const;
+
+/** The run's output directory, derived from the .sample file's path:
+ *  /a/b/fit.sample → /a/b/fit.out (replaced on each run). */
+export function outputDirFor(samplePath: string): string {
+	const dir = dirnameOf(samplePath);
+	const name = samplePath.split('/').pop() ?? '';
+	const stem = name.endsWith('.sample') ? name.slice(0, -'.sample'.length) : name;
+	return `${dir === '/' ? '' : dir}/${stem || 'run'}.out`;
+}
 
 export interface ParsedSampleFile {
 	config: SampleFileConfig;
@@ -62,12 +70,14 @@ export function parseSampleFile(text: string): ParsedSampleFile {
 	const record = raw as Record<string, unknown>;
 
 	for (const key of Object.keys(record)) {
-		if (!(KNOWN_KEYS as readonly string[]).includes(key)) {
+		if (key === 'output_dir') {
+			warnings.push("'output_dir' is no longer configurable (ignored) — results go to <sample-file-name>.out");
+		} else if (!(KNOWN_KEYS as readonly string[]).includes(key)) {
 			warnings.push(`unknown key '${key}' (ignored)`);
 		}
 	}
 
-	const str = (key: 'stan' | 'data' | 'output_dir'): string | undefined => {
+	const str = (key: 'stan' | 'data'): string | undefined => {
 		const value = record[key];
 		if (value === undefined || value === null) {
 			return undefined;
@@ -80,7 +90,6 @@ export function parseSampleFile(text: string): ParsedSampleFile {
 	};
 	config.stan = str('stan');
 	config.data = str('data');
-	config.output_dir = str('output_dir');
 
 	const num = (key: 'num_chains' | 'num_warmup' | 'num_samples' | 'init_radius' | 'seed', opts: { min: number; max?: number; integer: boolean }): number | undefined => {
 		const value = record[key];
@@ -109,9 +118,6 @@ export function parseSampleFile(text: string): ParsedSampleFile {
 	}
 	if (!config.data) {
 		errors.push("missing 'data': the JSON data file");
-	}
-	if (!config.output_dir) {
-		errors.push("missing 'output_dir': where results are written");
 	}
 
 	return { config, errors, warnings };

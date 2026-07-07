@@ -13,13 +13,13 @@ const check = (name, ok) => console.log(`${ok ? 'OK  ' : 'FAIL'} ${name}`);
 try {
 	await page.goto('http://127.0.0.1:3000/', { waitUntil: 'networkidle' });
 	await page.waitForTimeout(2000);
-	check('dev: cross-origin isolated', await page.evaluate(() => window.crossOriginIsolated));
 	await page.getByRole('button', { name: 'New sample project' }).click();
 	await page.waitForTimeout(2500);
 	check('dev: form view opens', await page.locator('.sample-editor').count() >= 1);
 
-	// run first (the LSP check below leaves the model file edited)
-	const haveServer = await fetch('http://localhost:8083/probe').then(r => r.ok).catch(() => false);
+	// run first (the LSP check below leaves the model file edited);
+	// probing also wakes the fly.io machine if it was auto-stopped
+	const haveServer = await fetch('https://stan-wasm-wasi.fly.dev/probe').then(r => r.ok).catch(() => false);
 	if (haveServer) {
 		await page.locator('.sample-run-button').click();
 		let done = false;

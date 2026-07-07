@@ -11,14 +11,16 @@ import {
 //
 //   <output_dir>/chain_1.csv ...   one CSV per chain, header = parameter names
 //   <output_dir>/summary.csv       mean, MCSE, sd, percentiles, ESS, Rhat
-//   <output_dir>/sampling_opts.json  the exact configuration used
 //   <output_dir>/console.txt       sampler console output
+//   <output_dir>/run.json          the exact configuration used — written
+//                                  LAST, so it doubles as the completion
+//                                  marker and anchors the results dashboard
 //
 // (the per-chain CSV layout matches stan-playground's "download multiple
 // CSVs" export)
 
 export interface RunOutputs {
-	/** draws[param][draw], chains concatenated along the draw axis (tinystan). */
+	/** draws[param][draw], chains concatenated along the draw axis. */
 	draws: number[][];
 	paramNames: string[];
 	numChains: number;
@@ -50,8 +52,8 @@ export async function writeRunOutputs(fs: WorkspaceFileSystem, outputDir: string
 	}
 
 	await write('summary.csv', summaryCsv(run));
-	await write('sampling_opts.json', JSON.stringify(run.samplingOpts, null, 2) + '\n');
 	await write('console.txt', run.consoleText);
+	await write('run.json', JSON.stringify({ format: 'stan-web-ide.run/1', ...run.samplingOpts }, null, 2) + '\n');
 
 	return written;
 }

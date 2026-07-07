@@ -1,7 +1,7 @@
 // End-to-end smoke test: landing → sample project → .sample form view,
-// Stan LSP diagnostics, server status. When a compile server is reachable
-// at http://localhost:8083 (e.g. the stan-wasm-server docker image), also
-// compiles + samples for real and checks the output files.
+// Stan LSP diagnostics, server status. When the compile server (the app's
+// default, the hosted stan-wasm-wasi instance) is reachable, also compiles
+// + samples for real and checks the output files.
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 
@@ -14,7 +14,8 @@ for (let i = 0; i < 60; i++) {
 	await new Promise((r) => setTimeout(r, 500));
 }
 
-const serverUrl = 'http://localhost:8083';
+// probing also wakes the fly.io machine if it was auto-stopped
+const serverUrl = 'https://stan-wasm-wasi.fly.dev';
 const haveServer = await fetch(`${serverUrl}/probe`).then(r => r.ok).catch(() => false);
 console.log(haveServer ? `compile server detected at ${serverUrl} — running full e2e` : 'no compile server — UI checks only');
 
@@ -38,7 +39,6 @@ const waitForOutput = async (needle, timeout = 20000) => {
 };
 
 try {
-	// use 127.0.0.1: the compile server's CORS allowlist matches that origin
 	await page.goto('http://127.0.0.1:4173/', { waitUntil: 'networkidle' });
 	await page.waitForTimeout(1200);
 	check('landing renders', await page.locator('.landing-empty').count() === 1);
@@ -98,24 +98,47 @@ try {
 		await page.locator('.mw-tab-label', { hasText: 'fit.sample' }).click();
 		await page.waitForTimeout(400);
 		await page.locator('.sample-run-button').click();
-		// progress bars should appear while sampling (4 chains)
+		// progress bars should appear while sampling (4 chains) — the
+		// sampling phase is sub-second for this model, so poll fast and use
+		// the cheap form status (not the output panel) to detect completion
 		let sawBars = 0;
 		const start = Date.now();
 		let done = false;
 		while (Date.now() - start < 360_000 && !done) {
 			sawBars = Math.max(sawBars, await page.locator('.sample-chain').count());
-			done = (await outputText()).includes('sampling completed');
-			if (!done) await page.waitForTimeout(300);
+			done = (await page.locator('.sample-run-status').innerText().catch(() => '')).includes('completed');
+			if (!done) await page.waitForTimeout(50);
 		}
-		check('fit.sample sampling completed', done);
+		check('fit.sample sampling completed', done && await waitForOutput('sampling completed'));
 		check('per-chain progress bars shown (4)', sawBars === 4);
 		await page.screenshot({ path: out + '/s-run-done.png' });
 
-		// output files in the explorer
-		await page.waitForTimeout(800);
-		await explorerItem('out').click();
+		// the results dashboard auto-opens on completion
+		let dashboardVisible = false;
+		for (let i = 0; i < 40 && !dashboardVisible; i++) {
+			await page.waitForTimeout(250);
+			dashboardVisible = await page.locator('.results-view:visible').count() === 1;
+		}
+		check('results dashboard auto-opens', dashboardVisible);
+		check('dashboard summary has beta row', await page.locator('.results-view:visible .results-table td', { hasText: /^beta$/ }).count() === 1);
+		// plotly loads lazily on the first plot tab
+		await page.locator('.results-tab', { hasText: 'Trace plots' }).click();
+		let plotsRendered = 0;
+		for (let i = 0; i < 60 && plotsRendered < 10; i++) {
+			await page.waitForTimeout(250);
+			plotsRendered = await page.locator('.results-view:visible .js-plotly-plot').count();
+		}
+		check('trace plots render (11 params)', plotsRendered === 11);
+		await page.screenshot({ path: out + '/s-dashboard.png' });
+
+		// back on the form, the View results button now shows
+		await page.locator('.mw-tab-label', { hasText: 'fit.sample' }).click();
 		await page.waitForTimeout(400);
-		await explorerItem('fit').click();
+		check('View results button shows', await page.locator('.sample-results-button:visible').count() === 1);
+
+		// output files in the explorer (fit.sample → fit.out/)
+		await page.waitForTimeout(800);
+		await explorerItem('fit.out').click();
 		await page.waitForTimeout(400);
 		check('chain_1.csv written', await explorerItem('chain_1.csv').count() === 1);
 		check('summary.csv written', await explorerItem('summary.csv').count() === 1);
@@ -148,16 +171,23 @@ try {
 		await page.waitForTimeout(300);
 		check('form edit marks tab dirty', await page.locator('.mw-tab.dirty').count() >= 1);
 		await quickForm.locator('.sample-run-button').click();
-		check('quick.sample sampling completed', await waitForOutput('files to /out/quick', 120_000));
-		await page.waitForTimeout(800);
-		await explorerItem('quick').click();
-		await page.waitForTimeout(400);
-		// both out/fit and out/quick hold one; /out/quick sorts last
-		await explorerItem('sampling_opts.json').last().click();
-		await page.waitForTimeout(800);
-		const opts = normalize(await page.locator('.view-lines').first().innerText());
-		check('sampling_opts records form-edited num_samples', opts.includes('"num_samples": 150'));
+		check('quick.sample sampling completed', await waitForOutput('files to /quick.out', 120_000));
+		// the quick.out dashboard auto-opens and reflects the form edit
+		await page.waitForTimeout(1500);
+		const quickSubtitle = normalize(await page.locator('.results-view:visible .results-subtitle').innerText());
+		check('dashboard records form-edited num_samples', quickSubtitle.includes('150 samples'));
 		await page.screenshot({ path: out + '/s-opts.png' });
+	}
+
+	if (haveServer) {
+		// after a reload, the dashboard reopens from the persisted output folder
+		await page.reload({ waitUntil: 'networkidle' });
+		await page.waitForTimeout(2500);
+		await explorerItem('fit.out').click();
+		await page.waitForTimeout(400);
+		await explorerItem('run.json').first().click();
+		await page.waitForTimeout(1500);
+		check('dashboard reopens after reload', await page.locator('.results-view:visible .results-table td', { hasText: /^beta$/ }).count() === 1);
 	}
 
 	// project lifecycle basics

@@ -22,7 +22,7 @@ export function showServerDialog(container: HTMLElement): void {
 
 	const description = document.createElement('p');
 	description.append(
-		'Compiling Stan programs to WebAssembly needs a stan-wasm-server; sampling then runs locally in your browser. Run one on your machine with:',
+		'Compiling Stan programs to WebAssembly needs a compilation server (stan-wasm-wasi); sampling then runs locally in your browser. The default is a hosted instance — the first compile after an idle period may take ~30 s while it wakes. To run one on your machine instead:',
 	);
 	box.appendChild(description);
 
@@ -33,7 +33,7 @@ export function showServerDialog(container: HTMLElement): void {
 	box.appendChild(command);
 
 	const note = document.createElement('p');
-	note.textContent = 'The server\'s CORS allowlist must include this page\'s origin.';
+	note.textContent = 'then set the URL to http://localhost:8083.';
 	box.appendChild(note);
 
 	const input = document.createElement('input');

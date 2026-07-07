@@ -1,17 +1,16 @@
 // The Stan compilation server: compiling .stan source to WebAssembly needs a
-// server (stan-playground's stan-wasm-server; see the README). The URL is a
-// user setting persisted in localStorage, shared by all projects.
+// server (stan-wasm-wasi; see the README). The URL is a user setting
+// persisted in localStorage, shared by all projects.
 //
-// Note the server's CORS allowlist must include this app's origin. The stock
-// docker image (ghcr.io/flatironinstitute/stan-wasm-server) allows
-// http://127.0.0.1:3000 and http://127.0.0.1:4173 — which is why dev/preview
-// run on those ports.
+// The default is the hosted instance on fly.io. It allows any origin (CORS),
+// caches compiled models by source hash, and auto-stops when idle — the
+// first compile after an idle period pays a ~30 s cold start.
 
 const SERVER_URL_KEY = 'stan-web-ide.compileServerUrl';
 
-export const DEFAULT_SERVER_URL = 'http://localhost:8083';
+export const DEFAULT_SERVER_URL = 'https://stan-wasm-wasi.fly.dev';
 export const LOCAL_SERVER_DOCKER_COMMAND =
-	'docker run -p 8083:8080 -it ghcr.io/flatironinstitute/stan-wasm-server:latest';
+	'docker build -t stan-wasm-wasi https://github.com/magland/stan-wasm-wasi.git && docker run --rm -p 8083:8080 stan-wasm-wasi';
 
 type Listener = (url: string) => void;
 const listeners = new Set<Listener>();

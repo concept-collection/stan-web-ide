@@ -1,0 +1,220 @@
+/* The sampling-results dashboard pane, themed with --vscode-* variables
+ * (same spirit as the .sample form editor). */
+
+.results-view {
+	height: 100%;
+	overflow-y: auto;
+	background-color: var(--vscode-editor-background);
+	color: var(--vscode-foreground);
+	font-family: system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+	font-size: 13px;
+}
+
+.results-inner {
+	max-width: 1000px;
+	margin: 0 auto;
+	padding: 24px 32px 48px;
+}
+
+.results-view h2 {
+	margin: 0 0 2px;
+	font-size: 20px;
+	font-weight: 400;
+}
+
+.results-subtitle {
+	margin: 0 0 14px;
+	color: var(--vscode-descriptionForeground);
+	font-size: 12px;
+}
+
+.results-tabs {
+	display: flex;
+	gap: 2px;
+	margin-bottom: 14px;
+	border-bottom: 1px solid var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.35));
+}
+
+.results-tab {
+	padding: 6px 12px;
+	font-size: 13px;
+	font-family: inherit;
+	cursor: pointer;
+	border: none;
+	background: none;
+	color: var(--vscode-descriptionForeground);
+	border-bottom: 2px solid transparent;
+	margin-bottom: -1px;
+}
+
+.results-tab:hover {
+	color: var(--vscode-foreground);
+}
+
+.results-tab.active {
+	color: var(--vscode-foreground);
+	border-bottom-color: var(--vscode-focusBorder, #0e70c0);
+}
+
+.results-error {
+	padding: 8px 10px;
+	border-left: 3px solid var(--vscode-editorWarning-foreground, #cca700);
+	background-color: var(--vscode-inputValidation-warningBackground, rgba(90, 73, 29, 0.4));
+	white-space: pre-wrap;
+}
+
+.results-note {
+	margin: 0 0 10px;
+	color: var(--vscode-descriptionForeground);
+	font-size: 12px;
+}
+
+/* --- tables (summary, draws) --- */
+
+.results-table-scroll {
+	overflow: auto;
+	max-height: calc(100vh - 220px);
+	border: 1px solid var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.35));
+}
+
+.results-table {
+	border-collapse: collapse;
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.results-table th {
+	position: sticky;
+	top: 0;
+	background-color: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+	text-align: right;
+	font-weight: 600;
+	padding: 4px 10px;
+	border-bottom: 1px solid var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.35));
+}
+
+.results-table th:first-child {
+	text-align: left;
+}
+
+.results-table td {
+	padding: 3px 10px;
+	border-bottom: 1px solid rgba(128, 128, 128, 0.12);
+}
+
+.results-table td.num {
+	text-align: right;
+}
+
+.results-table td.name {
+	color: var(--vscode-descriptionForeground);
+}
+
+.results-table td.warn {
+	color: var(--vscode-editorWarning-foreground, #cca700);
+}
+
+.results-table td.bad {
+	color: var(--vscode-editorError-foreground, #f48771);
+	font-weight: 600;
+}
+
+/* --- plots --- */
+
+.results-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+	gap: 14px;
+}
+
+.results-plot-card {
+	border: 1px solid var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.25));
+	border-radius: 3px;
+	padding: 6px 6px 2px;
+}
+
+.results-plot-card.wide {
+	margin-bottom: 14px;
+}
+
+.results-plot-title {
+	font-size: 12px;
+	font-weight: 600;
+	padding: 2px 6px 4px;
+}
+
+.results-plot {
+	height: 200px;
+}
+
+.results-plot-card.wide .results-plot {
+	height: 180px;
+}
+
+.results-plot-card.tall .results-plot {
+	height: 420px;
+}
+
+/* --- controls (scatter axes, draws chain) --- */
+
+.results-controls {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	margin-bottom: 10px;
+}
+
+.results-controls .results-note {
+	margin: 0;
+}
+
+.results-control {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 600;
+}
+
+.results-control select {
+	padding: 3px 6px;
+	font-size: 12px;
+	font-family: inherit;
+	color: var(--vscode-input-foreground);
+	background-color: var(--vscode-input-background);
+	border: 1px solid var(--vscode-input-border, transparent);
+	border-radius: 2px;
+	max-width: 220px;
+}
+
+.results-chain-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin-bottom: 10px;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.results-chain-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+}
+
+.results-chain-swatch {
+	width: 10px;
+	height: 10px;
+	border-radius: 2px;
+	display: inline-block;
+}
+
+.results-console {
+	margin: 0;
+	padding: 10px;
+	font-family: var(--monaco-monospace-font, monospace);
+	font-size: 12px;
+	white-space: pre-wrap;
+	background-color: var(--vscode-editorWidget-background, rgba(128, 128, 128, 0.08));
+	border: 1px solid var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.25));
+}
